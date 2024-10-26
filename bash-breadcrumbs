@@ -1,0 +1,62 @@
+# Maximum depth of the directory stack.
+export MAX_DIR_STACK=16
+
+# The first element in the directory stack is the current directory,
+# and the second element is the previous one.
+export PREV_DIR_INDEX=1
+
+# Sets up aliases for changing to directories in the stack.
+for (( i=0; i<MAX_DIR_STACK; i++ )); do
+    alias cd$i="cdx ${i}"
+done
+
+# An alias for jumping back to the previous directory.
+# Similar to `cd -`, but modified to work with the overridden directory stack.
+alias cdb=cd$((PREV_DIR_INDEX+1))
+
+# Lists all directories in the stack, excluding the first element,
+# which is the current directory.
+cdl() {
+    for ((i=1; i<MAX_DIR_STACK; i++)); do
+        [[ -n "$(dirs +$i 2>/dev/null)" ]] && dirs -v +$i
+    done
+}
+
+# Jumps to a specified directory in the stack.
+cdx() {
+    local dir_stack=($(dirs -l))
+    local index="$1"
+
+    if (( index >= ${#dir_stack[@]} )); then
+        echo "Error: Only ${#dir_stack[@]} directories in history."
+        return 1
+    fi
+
+    local dir=${dir_stack[$index]}
+    cd "${dir}"
+}
+
+# Pushes the current directory onto the stack.
+push-dir-stack() {
+    # Check if there is more than one directory in the stack.
+    if (( ${#DIRSTACK[@]} > 1 )); then
+        # Prevent pushing if the current directory is the same as the previous one.
+        if [[ "$(pwd)" == "${DIRSTACK[$PREV_DIR_INDEX]}" ]]; then
+            return
+        fi
+    fi
+
+    # Push the current directory onto the stack.
+    pushd "$(pwd)" >/dev/null
+
+    # Keep only the maximum number of elements defined by MAX_DIR_STACK.
+    while (( ${#DIRSTACK[@]} > MAX_DIR_STACK )); do
+        popd +"${MAX_DIR_STACK}" >/dev/null
+    done
+}
+
+if [[ -z "$PROMPT_COMMAND" ]]; then
+    PROMPT_COMMAND="push-dir-stack"
+else
+    PROMPT_COMMAND="${PROMPT_COMMAND};push-dir-stack"
+fi
