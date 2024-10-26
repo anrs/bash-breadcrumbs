@@ -1,0 +1,66 @@
+# Maximum depth of the directory stack.
+export MAX_DIR_STACK=16
+
+# Sets up aliases for changing to directories in the stack.
+for (( i=0; i<MAX_DIR_STACK; i++ )); do
+    alias cd$i="cdx ${i}"
+done
+
+# Lists all directories in the stack, excluding the first element,
+# which is the current directory.
+cdl() {
+    for ((i=1; i<MAX_DIR_STACK; i++)); do
+        [[ -n "$(dirs +$i 2>/dev/null)" ]] && dirs -v +$i
+    done
+}
+
+# Jumps to a specified directory in the stack.
+cdx() {
+    local dir_stack=($(dirs -l))
+    local index="$1"
+
+    if [[ -z "${index}" ]]; then
+        return 1
+    fi
+
+    if (( index >= ${#dir_stack[@]} )); then
+        echo "Error: Only ${#dir_stack[@]} directories in history."
+        return 1
+    fi
+
+    pushd "${dir_stack[$index]}" >/dev/null
+}
+
+cd() {
+    local target="${!#}"
+    local cur="$(pwd)"
+
+    local skips=("" "." "${cur}")
+    for elem in "${skips[@]}"; do
+        if [[ "${elem}" == "${target}" ]]; then
+            builtin cd "$@"
+            return
+        fi
+    done
+
+    if [[ "${target}" != "-" ]]; then
+        if [[ ! -d "${target}" || ! -r "${target}" || ! -x "${target}" ]]; then
+            builtin cd "$@"
+            return
+        fi
+    fi
+
+    while (( ${#DIRSTACK[@]} > MAX_DIR_STACK )); do
+        popd +"${MAX_DIR_STACK}" >/dev/null
+    done
+
+    # After the `pushd`, the $OLDPWD would be overridden by $cur.
+    local oldpwd=$OLDPWD
+
+    # Pushes current directory for storing.
+    pushd "${cur}" >/dev/null
+
+    export OLDPWD=$oldpwd
+
+    builtin cd "$@"
+}
